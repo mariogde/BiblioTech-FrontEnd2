@@ -5,35 +5,35 @@
         <AuthCard>
           <q-form @submit.prevent="handleLogin" class="q-gutter-y-md">
             <BaseInput
-              label="E-mail"
+              label="Email"
               v-model="form.email"
               type="email"
             />
 
             <BaseInput
-              label="Senha"
-              v-model="form.senha"
+              label="Password"
+              v-model="form.password"
               type="password"
             />
 
             <div class="q-pt-sm">
               <q-btn
-                label="Entrar"
+                label="Sign In"
                 type="submit"
                 unelevated
                 rounded
-                :loading="carregando"
+                :loading="isLoading"
                 class="full-width btn-submit"
               />
             </div>
           </q-form>
 
           <div class="row justify-around q-mt-lg text-caption">
-            <router-link to="/cadastro" class="custom-link">
-              Cadastre-se agora
+            <router-link to="/register" class="custom-link">
+              Register now
             </router-link>
-            <router-link to="/esqueci-senha" class="custom-link">
-              Esqueceu a senha
+            <router-link to="/forgot-password" class="custom-link">
+              Forgot password
             </router-link>
           </div>
         </AuthCard>
@@ -43,7 +43,6 @@
 </template>
 
 <script setup lang="ts">
-
 import type { AxiosError } from 'axios';
 import { reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
@@ -52,38 +51,48 @@ import { useAuthStore } from '../stores/authStore';
 import AuthCard from '../components/AuthCard.vue';
 import BaseInput from '../components/BaseInput.vue';
 
+interface ApiProblemDetail {
+  message?: string;
+  detail?: string;
+}
+
 const $q = useQuasar();
 const router = useRouter();
 const authStore = useAuthStore();
 
-const carregando = ref(false);
+const isLoading = ref(false);
 const form = reactive({
   email: '',
-  senha: ''
+  password: ''
 });
 
-async function handleLogin() {
-  carregando.value = true;
+const handleLogin = async () => {
+  isLoading.value = true
   try {
-    await authStore.login({
-      email: form.email,
-      password: form.senha
-    });
+    const user = await authStore.login(form.email, form.password)
 
-    $q.notify({
-      type: 'positive',
-      message: 'Login realizado com sucesso!'
-    });
+    if (user) {
+      $q.notify({
+        type: 'positive',
+        message: 'Login realizado com sucesso!'
+      })
 
-    await router.push('/app');
-  } catch (error: unknown) {
-    const err = error as AxiosError<{ message?: string }>;
-    $q.notify({
-      type: 'negative',
-      message: err.response?.data?.message || 'Erro ao realizar login. Verifique e-mail e senha.'
-    });
+      if (authStore.isAdmin) {
+        await router.push('/admin/books')
+      } else {
+        await router.push('/user/dashboard')
+      }
+    }
+  } catch (err) {
+    const error = err as AxiosError<ApiProblemDetail>
+    const msg =
+      error.response?.data?.message ||
+      error.response?.data?.detail ||
+      'E-mail ou senha incorretos.'
+
+    $q.notify({ type: 'negative', message: msg })
   } finally {
-    carregando.value = false;
+    isLoading.value = false
   }
 }
 </script>
