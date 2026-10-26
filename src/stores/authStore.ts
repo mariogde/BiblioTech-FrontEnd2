@@ -1,56 +1,81 @@
 import { defineStore } from 'pinia'
 import { api } from '../boot/axios'
-import type { LoginDTO, AuthResponse } from '../types/auth'
+
+export interface User {
+  id?: number
+  name?: string
+  email?: string
+  isAdmin?: boolean
+}
+
+interface AuthResponse {
+  token: string
+  isAdmin: boolean
+}
 
 interface AuthStoreState {
+  user: User | false
   token: string | null
-  usuario: string | null
 }
 
 export const useAuthStore = defineStore('auth', {
   state: (): AuthStoreState => ({
-    token: localStorage.getItem('token'),
-    usuario: localStorage.getItem('usuario')
+    user: localStorage.getItem('userEmail')
+      ? {
+          email: localStorage.getItem('userEmail') || '',
+          isAdmin: localStorage.getItem('isAdmin') === 'true'
+        }
+      : false,
+    token: localStorage.getItem('token')
   }),
 
   getters: {
-    estaAutenticado(state): boolean {
-      return !!state.token
+    isAuthenticated(state): boolean {
+      return !!state.token && !!state.user
     },
-    obterToken(state): string | null {
-      return state.token
+    isAdmin(state): boolean {
+      return state.user ? Boolean(state.user.isAdmin) : false
+    },
+    userEmail(state): string {
+      return state.user ? state.user.email || '' : ''
     }
   },
 
   actions: {
-    async login(credenciais: LoginDTO): Promise<boolean> {
-      try {
-        const response = await api.post<AuthResponse>('/auth/login', credenciais)
+    async login(email: string, password: string): Promise<User | false> {
+      this.user = false
+      this.token = null
 
-        if (response.data && response.data.token) {
-          const tokenRecebido = response.data.token
+      const response = await api.post<AuthResponse>('/auth/login', {
+        email,
+        password
+      })
 
-          this.token = tokenRecebido
-          this.usuario = credenciais.email
+      if (response.data && response.status === 200) {
+        const { token, isAdmin } = response.data
 
-          localStorage.setItem('token', tokenRecebido)
-          localStorage.setItem('usuario', credenciais.email)
-
-          return true
+        this.token = token
+        this.user = {
+          email,
+          isAdmin
         }
 
-        return false
-      } catch (error) {
-        this.logout()
-        throw error
+        // Persistência no LocalStorage
+        localStorage.setItem('token', token)
+        localStorage.setItem('userEmail', email)
+        localStorage.setItem('isAdmin', String(isAdmin))
       }
+
+      return this.user
     },
 
     logout() {
+      this.user = false
       this.token = null
-      this.usuario = null
+
       localStorage.removeItem('token')
-      localStorage.removeItem('usuario')
+      localStorage.removeItem('userEmail')
+      localStorage.removeItem('isAdmin')
     }
   }
 })
